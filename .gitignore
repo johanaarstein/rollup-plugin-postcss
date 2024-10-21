@@ -1,5 +1,11 @@
-/**/dist/
-/.idea/
-/coverage/
-/node_modules/
-/package-lock.json
+.cache
+.history
+.idea
+.vscode
+
+dist/
+node_modules
+assets/*
+
+.DS_Store
+*.pem
