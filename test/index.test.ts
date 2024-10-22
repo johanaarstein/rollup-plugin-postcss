@@ -1,9 +1,10 @@
+import { describe, expect, test } from '@jest/globals';
 import path from 'path'
 import fs from 'fs-extra'
 import { rollup } from 'rollup'
 import importSync from 'import-sync'
-import postcss from '@/.'
-import { PostCSSPluginConf } from '@/types'
+import postcss from '../src'
+import { PostCSSPluginConf } from '../src/types'
 
 process.env.ROLLUP_POSTCSS_TEST = 'true'
 /**
@@ -475,15 +476,23 @@ test('augmentChunkHash', async () => {
       dir: outDir,
       entryFileNames: `${entryFileName}.[hash].css`,
     })
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
     outputFiles.push(output[0])
   }
 
-  const [fooOne, fooTwo, barOne] = outputFiles
+  const [fooOne, fooTwo, barOne] = outputFiles,
 
-  const fooHash = fooOne.fileName.split('.')[1]
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    fooHash = fooOne.fileName.split('.')[1]
   expect(fooHash).toBeTruthy() // Verify that [hash] part of `foo.[hash].css` is truthy
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
   expect(fooOne.fileName).toEqual(fooTwo.fileName) // Verify that the foo hashes to the same fileName
 
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
   const barHash = barOne.fileName.split('.')[1]
   expect(barHash).not.toEqual(fooHash) // Verify that foo and bar does not hash to the same
 })

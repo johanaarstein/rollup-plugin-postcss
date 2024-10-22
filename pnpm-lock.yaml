@@ -60,6 +60,9 @@ importers:
       '@httptoolkit/esm':
         specifier: ^3.3.0
         version: 3.3.0
+      '@jest/globals':
+        specifier: ^29.7.0
+        version: 29.7.0
       '@rollup/plugin-commonjs':
         specifier: ^28.0.1
         version: 28.0.1(rollup@4.24.0)

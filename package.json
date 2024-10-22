@@ -15,12 +15,12 @@
     }
   },
   "scripts": {
-    "test": "pnpm lint && jest",
+    "test": "jest --watch",
     "test:cov": "pnpm lint && jest --coverage",
     "prebuild": "rimraf ./dist",
     "build": "rollup -c",
     "prebuild:types": "rimraf ./types",
-    "build:types": "tsc -p tsconfig.prod.json && tsc-alias",
+    "build:types": "tsc && tsc-alias",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "prepublishOnly": "pnpm build"
@@ -47,6 +47,7 @@
     "@eslint/eslintrc": "^3.1.0",
     "@eslint/js": "^9.13.0",
     "@httptoolkit/esm": "^3.3.0",
+    "@jest/globals": "^29.7.0",
     "@rollup/plugin-commonjs": "^28.0.1",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^15.3.0",
@@ -106,21 +107,7 @@
   "peerDependencies": {
     "postcss": "8.x"
   },
-  "xo": {
-    "extends": "rem",
-    "envs": [
-      "jest"
-    ],
-    "rules": {
-      "import/prefer-default-export": 0,
-      "import/extensions": 0,
-      "import/no-unassigned-import": 0,
-      "@typescript-eslint/semi": 0,
-      "eslint-comments/disable-enable-pair": 0,
-      "promise/prefer-await-to-then": 0
-    }
-  },
-  "jest": {
-    "testEnvironment": "node"
+  "_moduleAliases": {
+    "@": "src"
   }
 }
