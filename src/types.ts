@@ -1,43 +1,71 @@
 import type { CreateFilter } from 'rollup-pluginutils'
+import type { ConfigContext } from 'postcss-load-config'
+import type { InputPluginOption, SourceMapInput } from 'rollup'
 import sass from 'sass'
 import stylus from 'stylus'
+import less from 'less'
 
 type FunctionType<T = unknown, U = unknown> = (...args: readonly T[]) => U
 
-export interface Bundle {
-  [x: string]: {
-    facadeModuleId: string
-    modules?: string[]
+// export interface Bundle {
+//   [x: string]: {
+//     facadeModuleId: string
+//     modules?: string[]
+//   }
+// }
+
+export interface Context extends ConfigContext {
+  file?: {
+    basename: string
+    dirname: string
+    extname: string
   }
+  options?: ConfigContext
 }
 
-export interface Context {
-  id: string
-  sourceMap?: boolean | 'inline'
-  dependencies: Set<unknown>
-}
+// export interface Context {
+//   id: string
+//   sourceMap?: boolean | 'inline'
+//   dependencies: Set<unknown>
+// }
+
+// export type MapObject =
+//   | string
+//   | boolean
+//   | {
+//       annotation: boolean
+//       inline: boolean
+//       mappings?: string
+//       sources?: string[]
+//     }
 
 export interface Loader {
   name: string
-  process({ code }: { code: string }): Promise<{
-    code: string
-    map?: string
-  }>
+  process({ code }?: { code: string }):
+    | Promise<{
+        code: string
+        map?: SourceMapInput
+      }>
+    | string
   test?: ((x: string) => boolean) | RegExp
 }
 
-export type Plugin = (x: unknown) => unknown
+// export type Plugin = (x: unknown) => unknown
 
-export type Use = string[] | { [key in 'sass' | 'stylus' | 'less']: unknown }
+type Modules = 'sass' | 'stylus' | 'less'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type Use = string[] | [Modules, any][] | { [key in Modules]: any }
 
 export interface PostCSSPluginConf {
   autoModules?: boolean
   config?:
     | boolean
     | {
-        path: string
-        ctx: Context
+        path?: string
+        ctx?: ConfigContext
       }
+  delayResolve?: boolean
   exclude?: Parameters<CreateFilter>[1]
   exec?: boolean
   extensions?: string[]
@@ -54,15 +82,15 @@ export interface PostCSSPluginConf {
   namedExports?: boolean | ((id: string) => string)
   onImport?: (id: string) => void
   onExtract?: (
-    asset: Readonly<{
+    asset?: Readonly<{
       code: string
-      map: string
+      map?: SourceMapInput
       codeFileName: string
       mapFileName: string
     }>
-  ) => boolean
+  ) => Promise<boolean>
   parser?: string | FunctionType
-  plugins?: Plugin[]
+  plugins?: InputPluginOption
   to?: string
   sourceMap?: boolean | 'inline'
   stringifier?: string | FunctionType
@@ -72,55 +100,4 @@ export interface PostCSSPluginConf {
 
 export type Sass = typeof sass
 export type Stylus = typeof stylus
-
-/*
-
-import { Plugin } from 'rollup'
-import { CreateFilter } from 'rollup-pluginutils'
-
-type FunctionType<T = any, U = any> = (...args: readonly T[]) => U;
-
-type onExtract = (asset: Readonly<{
-	code: any;
-	map: any;
-	codeFileName: string;
-	mapFileName: string;
-}>) => boolean;
-
-export type PostCSSPluginConf = {
-	inject?:
-	| boolean
-	| Record<string, any>
-	| ((cssVariableName: string, id: string) => string);
-	extract?: boolean | string;
-	onExtract?: onExtract;
-	modules?: boolean | Record<string, any>;
-	extensions?: string[];
-	plugins?: any[];
-	autoModules?: boolean;
-	namedExports?: boolean | ((id: string) => string);
-	minimize?: boolean | any;
-	parser?: string | FunctionType;
-	stringifier?: string | FunctionType;
-	syntax?: string | FunctionType;
-	exec?: boolean;
-	config?:
-	| boolean
-	| {
-		path: string;
-		ctx: any;
-	};
-	to?: string;
-	name?: any[] | any[][];
-	loaders?: any[];
-	onImport?: (id: string) => void;
-	use?: string[] | { [key in 'sass' | 'stylus' | 'less']: any };
-
-sourceMap ?: boolean | 'inline';
-include ?: Parameters < CreateFilter > [0];
-exclude ?: Parameters < CreateFilter > [1];
-};
-
-export default function (options?: Readonly<PostCSSPluginConf>): Plugin
-
-*/
+export type Less = typeof less

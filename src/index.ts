@@ -1,9 +1,18 @@
 import path from 'path'
 import { createFilter } from 'rollup-pluginutils'
 import Concat from 'concat-with-sourcemaps'
+import type {
+  ModuleInfo,
+  NormalizedOutputOptions,
+  OutputBundle,
+  Plugin,
+  SourceMapInput,
+  TransformResult,
+} from 'rollup'
+import type { ProcessOptions } from 'postcss'
 import Loaders from '@/Loaders'
-import normalizePath from '@/utils/normalize-path'
-import type { Bundle, PostCSSPluginConf } from '@/types'
+import { normalizePath } from '@/utils'
+import type { PostCSSPluginConf } from '@/types'
 
 /**
  * The options that could be `boolean` or `object`
@@ -30,8 +39,8 @@ function inferOption<T>(option: T, defaultValue: T) {
  */
 function getRecursiveImportOrder(
   id: string,
-  getModuleInfo: (id: string) => { importedIds: [] },
-  seen = new Set()
+  getModuleInfo: (id: string) => null | ModuleInfo,
+  seen = new Set<string>()
 ) {
   if (seen.has(id)) {
     return []
@@ -40,14 +49,18 @@ function getRecursiveImportOrder(
   seen.add(id)
 
   const result = [id]
-  for (const importFile of getModuleInfo(id).importedIds) {
+  for (const importFile of getModuleInfo(id)?.importedIds || []) {
     result.push(...getRecursiveImportOrder(importFile, getModuleInfo, seen))
   }
 
   return result
 }
 
-const postCSS = (options: PostCSSPluginConf = {}) => {
+/**
+ * Seamless integration between {@link https://github.com/rollup/rollup|Rollup}
+ * and {@link https://github.com/postcss/postcss|PostCSS}.
+ */
+export default function postCSS(options: PostCSSPluginConf = {}): Plugin {
   const filter = createFilter(options.include, options.exclude)
   const postcssPlugins = Array.isArray(options.plugins)
     ? options.plugins.filter(Boolean)
@@ -82,10 +95,12 @@ const postCSS = (options: PostCSSPluginConf = {}) => {
       /** PostCSS target filename hint, for plugins that are relying on it */
       to: options.to,
     }
-  let use = ['sass', 'stylus', 'less']
+  // TODO:
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let use: any = ['sass', 'stylus', 'less']
   if (Array.isArray(options.use)) {
     use = options.use
-  } else if (options.use !== null && typeof options.use === 'object') {
+  } else if (!!options.use && typeof options.use === 'object') {
     use = [
       ['sass', options.use.sass || {}],
       ['stylus', options.use.stylus || {}],
@@ -119,11 +134,8 @@ const postCSS = (options: PostCSSPluginConf = {}) => {
     },
 
     async generateBundle(
-      options_: {
-        dir?: string
-        file?: string
-      },
-      bundle: Bundle
+      options_: NormalizedOutputOptions,
+      bundle: OutputBundle
     ) {
       if (extracted.size === 0 || !(options_.dir || options_.file)) {
         return
@@ -140,7 +152,12 @@ const postCSS = (options: PostCSSPluginConf = {}) => {
             // @ts-ignore
             Object.keys(bundle).find((fileName) => bundle[fileName].isEntry)
           )
-      const getExtracted = () => {
+      const getExtracted = (): {
+        code: string
+        map?: SourceMapInput
+        codeFileName: string
+        mapFileName: string
+      } => {
         let fileName = `${path.basename(file, path.extname(file))}.css`
         if (typeof postcssLoaderOptions.extract === 'string') {
           fileName = path.isAbsolute(postcssLoaderOptions.extract)
@@ -150,6 +167,9 @@ const postCSS = (options: PostCSSPluginConf = {}) => {
 
         const concat = new Concat(true, fileName, '\n'),
           entries = [...extracted.values()],
+          // TODO:
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
           { facadeModuleId, modules } =
             bundle[normalizePath(path.relative(dir, file))]
 
@@ -177,6 +197,8 @@ const postCSS = (options: PostCSSPluginConf = {}) => {
 
         if (sourceMap === 'inline') {
           code += `\n/*# sourceMappingURL=data:application/json;base64,${Buffer.from(
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
             concat.sourceMap,
             'utf8'
           ).toString('base64')}*/`
@@ -187,56 +209,52 @@ const postCSS = (options: PostCSSPluginConf = {}) => {
         return {
           code,
           codeFileName: fileName,
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
           map: sourceMap === true && concat.sourceMap,
           mapFileName: `${fileName}.map`,
         }
       }
 
       if (options.onExtract) {
-        const shouldExtract = await options.onExtract(getExtracted)
+        const shouldExtract = await options.onExtract(getExtracted())
         if (shouldExtract === false) {
           return
         }
       }
 
-      // let { code, codeFileName, map, mapFileName } = getExtracted()
-      const extracted = getExtracted()
+      const _extracted = getExtracted()
       // Perform cssnano on the extracted file
       if (postcssLoaderOptions.minimize) {
-        const cssOptions: {
-          from?: string
-          map?: {
-            inline?: boolean
-            prev?: string
-          }
-          to?: string
-        } = {}
-        cssOptions.from = extracted.codeFileName
+        const cssOptions: ProcessOptions = {}
+        cssOptions.from = _extracted.codeFileName
         if (sourceMap === 'inline') {
           cssOptions.map = { inline: true }
-        } else if (sourceMap === true && extracted.map) {
-          cssOptions.map = { prev: extracted.map }
-          cssOptions.to = extracted.codeFileName
+        } else if (sourceMap === true && _extracted.map) {
+          cssOptions.map = { prev: _extracted.map }
+          cssOptions.to = _extracted.codeFileName
         }
 
         const cssnano = await import('cssnano'),
-          result = await cssnano.default().process(extracted.code, cssOptions)
-        extracted.code = result.css
+          result = await cssnano.default().process(_extracted.code, cssOptions)
+        _extracted.code = result.css
 
         if (sourceMap === true && result.map && result.map.toString) {
-          extracted.map = result.map.toString()
+          _extracted.map = result.map.toString()
         }
       }
 
       this.emitFile({
-        fileName: extracted.codeFileName,
-        source: extracted.code,
+        fileName: _extracted.codeFileName,
+        source: _extracted.code,
         type: 'asset',
       })
-      if (extracted.map) {
+      if (_extracted.map) {
         this.emitFile({
-          fileName: extracted.mapFileName,
-          source: extracted.map,
+          fileName: _extracted.mapFileName,
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          source: _extracted.map,
           type: 'asset',
         })
       }
@@ -244,7 +262,7 @@ const postCSS = (options: PostCSSPluginConf = {}) => {
 
     name: 'postcss',
 
-    async transform(code: string, id: string) {
+    async transform(code: string, id: string): Promise<TransformResult> {
       if (!filter(id) || !loaders.isSupported(id)) {
         return null
       }
@@ -254,20 +272,21 @@ const postCSS = (options: PostCSSPluginConf = {}) => {
       }
 
       const loaderContext = {
-        dependencies: new Set(),
-        id,
-        plugin: this,
-        sourceMap,
-        warn: this.warn.bind(this),
-      }
-
-      const result = await loaders.process(
-        {
-          code,
-          map: undefined,
+          dependencies: new Set<string>(),
+          id,
+          plugin: this,
+          sourceMap,
+          warn: this.warn.bind(this),
         },
-        loaderContext
-      )
+        result = await loaders.process(
+          {
+            code,
+            map: undefined,
+          },
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          loaderContext
+        )
 
       for (const dep of loaderContext.dependencies) {
         this.addWatchFile(dep)
@@ -288,5 +307,3 @@ const postCSS = (options: PostCSSPluginConf = {}) => {
     },
   }
 }
-
-export default postCSS

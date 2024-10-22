@@ -33,7 +33,7 @@
     ],
     "removeComments": true,
     "resolveJsonModule": true,
-    "rootDir": "src",
+    "rootDir": ".",
     "strict": true,
     "target": "ES2021",
     "useDefineForClassFields": false,
@@ -46,6 +46,7 @@
   },
   "include": [
     "src/**/*",
+    "test/**/*.ts",
     "global.d.ts"
   ],
   "exclude": [

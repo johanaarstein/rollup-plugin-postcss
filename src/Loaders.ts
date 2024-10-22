@@ -1,5 +1,6 @@
 import path from 'path'
-import series from '@/utils/promiseSeries'
+import type { SourceMapInput } from 'rollup'
+import { series } from '@/utils'
 import postcssLoader from '@/postcss-loader'
 import sassLoader from '@/sass-loader'
 import stylusLoader from '@/stylus-loader'
@@ -22,6 +23,8 @@ const matchFile = (
 export default class Loaders {
   constructor(options: PostCSSPluginConf = {}) {
     this.use =
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       options.use?.map((rule) => {
         if (Array.isArray(rule)) {
           return rule
@@ -86,17 +89,21 @@ export default class Loaders {
    * @returns {{code: string, map?: any}}
    */
   public async process(
-    { code, map }: { code: string; map?: string },
+    { code, map }: { code: string; map?: SourceMapInput },
     context: Context
   ): Promise<{
     code: string
-    map?: { mappings: string }
+    map?: SourceMapInput
     extracted: unknown
   }> {
     return series(
       this.use
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
         .slice()
         .reverse()
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
         .map(([name, options]) => {
           const loader = this.getLoader(name),
             loaderContext = {
@@ -108,6 +115,8 @@ export default class Loaders {
             if (
               loader &&
               (('alwaysProcess' in loader && loader.alwaysProcess) ||
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore
                 matchFile(loaderContext.id, loader.test))
             ) {
               return loader.process.call(loaderContext, val)

@@ -3,7 +3,7 @@ import pify from 'pify'
 import resolve from 'resolve'
 import PQueue from 'p-queue'
 import type { Sass } from '@/types'
-import { loadModule } from '@/utils/load-module'
+import { loadModule } from '@/utils'
 
 const threadPoolSize = Number(process.env.UV_THREADPOOL_SIZE || 4),
   workQueue = new PQueue({ concurrency: threadPoolSize - 1 }),
@@ -24,11 +24,17 @@ const threadPoolSize = Number(process.env.UV_THREADPOOL_SIZE || 4),
       return new Promise((resolve, reject) => {
         const sass = loadSassOrThrow(),
           render = pify(sass.render.bind(sass)),
-          data = this.options.data || ''
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          data = this.options?.data || ''
         workQueue.add(() =>
           render({
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
             ...this.options,
             data: data + code,
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
             file: this.id,
             importer: [
               (
@@ -73,17 +79,31 @@ const threadPoolSize = Number(process.env.UV_THREADPOOL_SIZE || 4),
                     }
                   })
               },
-            ].concat(this.options.importer || []),
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              // @ts-ignore
+            ].concat(this.options?.importer || []),
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
             indentedSyntax: /\.sass$/.test(this.id),
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
             sourceMap: this.sourceMap,
           })
             .then((result) => {
-              for (const file of result.stats.includedFiles) {
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              // @ts-ignore
+              for (const file of result.stats?.includedFiles || []) {
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore
                 this.dependencies.add(file)
               }
 
               resolve({
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore
                 code: result.css.toString(),
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore
                 map: result.map && result.map.toString(),
               })
             })

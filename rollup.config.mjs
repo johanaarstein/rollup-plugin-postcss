@@ -4,8 +4,7 @@ import { readFile } from 'fs/promises'
 import commonjs from '@rollup/plugin-commonjs'
 import { dts } from 'rollup-plugin-dts'
 import { nodeResolve } from '@rollup/plugin-node-resolve'
-import json from '@rollup/plugin-json'
-import * as summary from 'rollup-plugin-summary'
+import { summary } from 'rollup-plugin-summary'
 import { swc } from 'rollup-plugin-swc3'
 import { typescriptPaths } from 'rollup-plugin-typescript-paths'
 
@@ -27,7 +26,7 @@ const __filename = fileURLToPath(import.meta.url),
     plugins: [dts()],
   },
   module = {
-    external: ['lottie-web', 'fflate'],
+    external: Object.keys(pkg.dependencies),
     input: path.resolve(__dirname, 'src', 'index.ts'),
     onwarn(warning, warn) {
       if (
@@ -44,24 +43,21 @@ const __filename = fileURLToPath(import.meta.url),
         file: pkg.module,
         format: 'esm',
       },
-      {
-        exports: 'named',
-        file: pkg.exports['.'].require,
-        format: 'cjs',
-      },
+      // {
+      //   exports: 'named',
+      //   file: pkg.exports['.'].require,
+      //   format: 'cjs',
+      // },
     ],
     plugins: [
       typescriptPaths(),
-      json({
-        compact: true,
-      }),
       nodeResolve({
         extensions: ['.ts'],
         preferBuiltins: true,
       }),
       commonjs(),
       swc(),
-      summary.default(),
+      summary(),
     ],
   }
 

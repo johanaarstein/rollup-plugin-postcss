@@ -1,38 +1,39 @@
 import type { CreateFilter } from 'rollup-pluginutils';
+import type { ConfigContext } from 'postcss-load-config';
+import type { InputPluginOption, SourceMapInput } from 'rollup';
 import sass from 'sass';
 import stylus from 'stylus';
+import less from 'less';
 type FunctionType<T = unknown, U = unknown> = (...args: readonly T[]) => U;
-export interface Bundle {
-    [x: string]: {
-        facadeModuleId: string;
-        modules?: string[];
+export interface Context extends ConfigContext {
+    file?: {
+        basename: string;
+        dirname: string;
+        extname: string;
     };
-}
-export interface Context {
-    id: string;
-    sourceMap?: boolean | 'inline';
-    dependencies: Set<unknown>;
+    options?: ConfigContext;
 }
 export interface Loader {
     name: string;
-    process({ code }: {
+    process({ code }?: {
         code: string;
     }): Promise<{
         code: string;
-        map?: string;
-    }>;
+        map?: SourceMapInput;
+    }> | string;
     test?: ((x: string) => boolean) | RegExp;
 }
-export type Plugin = (x: unknown) => unknown;
-export type Use = string[] | {
-    [key in 'sass' | 'stylus' | 'less']: unknown;
+type Modules = 'sass' | 'stylus' | 'less';
+export type Use = string[] | [Modules, any][] | {
+    [key in Modules]: any;
 };
 export interface PostCSSPluginConf {
     autoModules?: boolean;
     config?: boolean | {
-        path: string;
-        ctx: Context;
+        path?: string;
+        ctx?: ConfigContext;
     };
+    delayResolve?: boolean;
     exclude?: Parameters<CreateFilter>[1];
     exec?: boolean;
     extensions?: string[];
@@ -45,14 +46,14 @@ export interface PostCSSPluginConf {
     name?: unknown[] | unknown[][];
     namedExports?: boolean | ((id: string) => string);
     onImport?: (id: string) => void;
-    onExtract?: (asset: Readonly<{
+    onExtract?: (asset?: Readonly<{
         code: string;
-        map: string;
+        map?: SourceMapInput;
         codeFileName: string;
         mapFileName: string;
-    }>) => boolean;
+    }>) => Promise<boolean>;
     parser?: string | FunctionType;
-    plugins?: Plugin[];
+    plugins?: InputPluginOption;
     to?: string;
     sourceMap?: boolean | 'inline';
     stringifier?: string | FunctionType;
@@ -61,4 +62,5 @@ export interface PostCSSPluginConf {
 }
 export type Sass = typeof sass;
 export type Stylus = typeof stylus;
+export type Less = typeof less;
 export {};

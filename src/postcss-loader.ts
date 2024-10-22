@@ -1,10 +1,12 @@
 import path from 'path'
 import importCwd from 'import-cwd'
 import postcss from 'postcss'
+import type { SourceMapInput } from 'rollup'
 import findPostcssConfig from 'postcss-load-config'
 import { identifier } from 'safe-identifier'
-import humanlizePath from '@/utils/humanlize-path'
-import normalizePath from '@/utils/normalize-path'
+import type { ConfigContext } from 'postcss-load-config'
+import { humanlizePath, normalizePath } from '@/utils'
+import type { Context } from '@/types'
 
 const styleInjectPath = require
   .resolve('style-inject/dist/style-inject.es')
@@ -13,7 +15,10 @@ const styleInjectPath = require
 /**
  *
  */
-function loadConfig(id: string, { ctx: configOptions, path: configPath }) {
+function loadConfig(
+  id: string,
+  { ctx: configOptions, path: configPath }: { ctx: ConfigContext; path: string }
+) {
   const handleError = (err: Error) => {
     if (!err.message.includes('No PostCSS Config found')) {
       throw err
@@ -23,38 +28,38 @@ function loadConfig(id: string, { ctx: configOptions, path: configPath }) {
     return {}
   }
 
-  configPath = configPath ? path.resolve(configPath) : path.dirname(id)
-  const ctx = {
-    file: {
-      basename: path.basename(id),
-      dirname: path.dirname(id),
-      extname: path.extname(id),
-    },
-    options: configOptions || {},
-  }
+  const returnPath = configPath ? path.resolve(configPath) : path.dirname(id),
+    ctx: Context = {
+      file: {
+        basename: path.basename(id),
+        dirname: path.dirname(id),
+        extname: path.extname(id),
+      },
+      options: configOptions || {},
+    }
 
-  return findPostcssConfig(ctx, configPath).catch(handleError)
+  return findPostcssConfig(ctx, returnPath).catch(handleError)
 }
 
 /**
  *
  */
-function escapeClassNameDashes(string) {
-  return string.replace(/-+/g, (match) => `$${match.replace(/-/g, '_')}$`)
+function escapeClassNameDashes(str: string) {
+  return str.replace(/-+/g, (match) => `$${match.replace(/-/g, '_')}$`)
 }
 
 /**
  *
  */
 function ensureClassName(name: string) {
-  name = escapeClassNameDashes(name)
-  return identifier(name, false)
+  const returnName = escapeClassNameDashes(name)
+  return identifier(returnName, false)
 }
 
 /**
  *
  */
-function ensurePostCSSOption(option) {
+function ensurePostCSSOption(option: unknown) {
   return typeof option === 'string' ? importCwd(option) : option
 }
 
@@ -71,27 +76,43 @@ const postcssLoader = {
 
   // `test` option is dynamically set in ./loaders
 
-  async process({ code, map }) {
+  async process({ code, map }: { code: string; map?: string }): Promise<{
+    code: string
+    extracted?: {
+      code: string
+      id: string
+      map: SourceMapInput
+    }
+    map?: SourceMapInput
+  }> {
+    // console.log('postcss-loader this:', this)
+
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
     const config = this.options.config
-      ? await loadConfig(this.id, this.options.config)
-      : {}
-
-    const { options } = this
-    const plugins = [
-      ...(options.postcss.plugins || []),
-      ...(config.plugins || []),
-    ]
-    const shouldExtract = options.extract
-    const shouldInject = options.inject
-
-    const modulesExported = {}
-    const autoModules =
-      options.autoModules !== false && options.onlyModules !== true
-    const isAutoModule = autoModules && isModuleFile(this.id)
-    const supportModules = autoModules ? isAutoModule : options.modules
+        ? // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          await loadConfig(this.id, this.options.config)
+        : {},
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      { options } = this,
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      plugins = [...(options.postcss.plugins || []), ...(config.plugins || [])],
+      shouldExtract = options.extract,
+      shouldInject = options.inject,
+      modulesExported = {},
+      autoModules =
+        options.autoModules !== false && options.onlyModules !== true,
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      isAutoModule = autoModules && isModuleFile(this.id),
+      supportModules = autoModules ? isAutoModule : options.modules
     if (supportModules) {
+      const postcssModules = await import('postcss-modules')
       plugins.unshift(
-        require('postcss-modules')({
+        postcssModules.default({
           // In tests
           // Skip hash in names since css content on windows and linux would differ because of `new line` (\r?\n)
           generateScopedName: process.env.ROLLUP_POSTCSS_TEST
@@ -99,6 +120,8 @@ const postcssLoader = {
             : '[name]_[local]__[hash:base64:5]',
           ...options.modules,
           getJSON(filepath, json, outpath) {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
             modulesExported[filepath] = json
             if (
               typeof options.modules === 'object' &&
@@ -113,20 +136,42 @@ const postcssLoader = {
 
     // If shouldExtract, minimize is done after all CSS are extracted to a file
     if (!shouldExtract && options.minimize) {
-      plugins.push(require('cssnano')(options.minimize))
+      const cssnano = await import('cssnano')
+      plugins.push(cssnano.default)
+    }
+
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    let optionsMap: SourceMapInput = false
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    if (this.sourceMap) {
+      if (shouldExtract) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        optionsMap = { annotation: false, inline: false }
+      } else {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        optionsMap = { annotation: false, inline: true }
+      }
     }
 
     const postcssOptions = {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       ...this.options.postcss,
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       ...config.options,
       // Followings are never modified by user config config
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       from: this.id,
-      map: this.sourceMap
-        ? shouldExtract
-          ? { annotation: false, inline: false }
-          : { annotation: false, inline: true }
-        : false,
+      map: optionsMap,
       // Allow overriding `to` for some plugins that are relying on this value
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       to: options.to || this.id,
     }
     delete postcssOptions.plugins
@@ -154,32 +199,43 @@ const postcssLoader = {
 
     for (const message of result.messages) {
       if (message.type === 'dependency') {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
         this.dependencies.add(message.file)
       }
     }
 
     for (const warning of result.warnings()) {
-      if (!warning.message) {
-        warning.message = warning.text
+      if (!('message' in warning)) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        // eslint-disable-next-line dot-notation
+        warning['message'] = warning.text
       }
 
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       this.warn(warning)
     }
 
     const outputMap = result.map && JSON.parse(result.map.toString())
     if (outputMap && outputMap.sources) {
-      outputMap.sources = outputMap.sources.map((v) => normalizePath(v))
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      outputMap.sources = outputMap.sources.map((val) => normalizePath(val))
     }
 
     let output = ''
     let extracted
 
     if (options.namedExports) {
-      const json = modulesExported[this.id]
-      const getClassName =
-        typeof options.namedExports === 'function'
-          ? options.namedExports
-          : ensureClassName
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      const json = modulesExported[this.id],
+        getClassName =
+          typeof options.namedExports === 'function'
+            ? options.namedExports
+            : ensureClassName
 
       for (const name in json) {
         const newName = getClassName(name)
@@ -187,7 +243,11 @@ const postcssLoader = {
         // But skip this when namedExports is a function
         // Since a user like you can manually log that if you want
         if (name !== newName && typeof options.namedExports !== 'function') {
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
           this.warn(
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
             `Exported "${name}" as "${newName}" in ${humanlizePath(this.id)}`
           )
         }
@@ -202,15 +262,21 @@ const postcssLoader = {
 
     const cssVariableName = identifier('css', true)
     if (shouldExtract) {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       output += `export default ${JSON.stringify(modulesExported[this.id])};`
       extracted = {
         code: result.css,
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
         id: this.id,
         map: outputMap,
       }
     } else {
       const module = supportModules
-        ? JSON.stringify(modulesExported[this.id])
+        ? // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          JSON.stringify(modulesExported[this.id])
         : cssVariableName
       output +=
         `var ${cssVariableName} = ${JSON.stringify(result.css)};\n` +
@@ -221,7 +287,9 @@ const postcssLoader = {
     if (!shouldExtract && shouldInject) {
       output +=
         typeof options.inject === 'function'
-          ? options.inject(cssVariableName, this.id)
+          ? // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            options.inject(cssVariableName, this.id)
           : '\n' +
             `import styleInject from '${styleInjectPath}';\n` +
             `styleInject(${cssVariableName}${

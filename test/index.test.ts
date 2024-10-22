@@ -1,24 +1,36 @@
 import path from 'path'
 import fs from 'fs-extra'
 import { rollup } from 'rollup'
-import postcss from '../src'
+import importSync from 'import-sync'
+import postcss from '@/.'
+import { PostCSSPluginConf } from '@/types'
 
-process.env.ROLLUP_POSTCSS_TEST = true
+process.env.ROLLUP_POSTCSS_TEST = 'true'
 /**
  * solve jest timeout on Windows OS
  */
 const JEST_TIMEOUT = process.platform === 'win32' ? 20000 : 5000
 
-function fixture(...args) {
+/**
+ *
+ */
+function fixture(...args: string[]) {
   return path.join(__dirname, 'fixtures', ...args)
 }
 
 beforeAll(() => fs.remove(fixture('dist')))
 
+/**
+ *
+ */
 async function write({
   input,
+  options,
   outDir,
-  options
+}: {
+  input: string
+  options: PostCSSPluginConf
+  outDir: string
 }) {
   const { delayResolve, ...postCssOptions } = options
 
@@ -26,7 +38,7 @@ async function write({
   // Delay the resolving of the first css file
   const lateResolve = {
     name: 'late-resolve',
-    async resolveId(importee) {
+    async resolveId(importee: string) {
       // when it's not a css file and not the first css file we return
       if (!first || !importee.endsWith('.css')) {
         return null
@@ -35,34 +47,35 @@ async function write({
       first = false
 
       // delay resolving
-      return new Promise(resolve => {
+      return new Promise((resolve) => {
         setTimeout(() => resolve(null), 1000)
       })
-    }
-  }
-
-  outDir = fixture('dist', outDir)
-  const bundle = await rollup({
-    input: fixture(input),
-    plugins: [postcss(postCssOptions), delayResolve && lateResolve].filter(
-      Boolean
-    )
-  })
-  await bundle.write({
-    format: 'cjs',
-    file: path.join(outDir, 'bundle.js')
-  })
-  let cssCodePath = path.join(outDir, 'bundle.css')
-  if (typeof options.extract === 'string') {
-    cssCodePath = path.isAbsolute(options.extract) ? options.extract : path.join(outDir, options.extract)
-  }
-
-  const cssMapPath = `${cssCodePath}.map`
-  const jsCodePath = path.join(outDir, 'bundle.js')
-  return {
-    jsCode() {
-      return fs.readFile(jsCodePath, 'utf8')
     },
+  }
+
+  const _outDir = fixture('dist', outDir),
+    bundle = await rollup({
+      input: fixture(input),
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      plugins: [postcss(postCssOptions), delayResolve && lateResolve].filter(
+        Boolean
+      ),
+    })
+  await bundle.write({
+    file: path.join(_outDir, 'bundle.js'),
+    format: 'cjs',
+  })
+  let cssCodePath = path.join(_outDir, 'bundle.css')
+  if (typeof options.extract === 'string') {
+    cssCodePath = path.isAbsolute(options.extract)
+      ? options.extract
+      : path.join(_outDir, options.extract)
+  }
+
+  const cssMapPath = `${cssCodePath}.map`,
+    jsCodePath = path.join(_outDir, 'bundle.js')
+  return {
     cssCode() {
       return fs.readFile(cssCodePath, 'utf8')
     },
@@ -74,58 +87,81 @@ async function write({
     },
     hasCssMapFile() {
       return fs.pathExists(cssMapPath)
-    }
+    },
+    jsCode() {
+      return fs.readFile(jsCodePath, 'utf8')
+    },
   }
 }
 
+/**
+ *
+ */
 function snapshot({
-  title,
   input,
+  options = {},
   outDir,
-  options = {}
+  title,
+}: {
+  input: string
+  options?: PostCSSPluginConf
+  outDir: string
+  title: string
 }) {
-  test(title, async () => {
-    let result
-    try {
-      result = await write({
-        input,
-        outDir,
-        options
-      })
-    } catch (error) {
-      const frame = error.codeFrame || error.snippet
-      if (frame) {
-        throw new Error(frame + error.message)
+  test(
+    title,
+    async () => {
+      let result
+      try {
+        result = await write({
+          input,
+          options,
+          outDir,
+        })
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (error: any) {
+        const frame = error.codeFrame || error.snippet
+        if (frame) {
+          throw new Error(frame + error.message)
+        }
+
+        throw error
       }
 
-      throw error
-    }
+      expect(await result.jsCode()).toMatchSnapshot('js code')
 
-    expect(await result.jsCode()).toMatchSnapshot('js code')
-
-    if (options.extract) {
-      expect(await result.hasCssFile()).toBe(true)
-      expect(await result.cssCode()).toMatchSnapshot('css code')
-    }
-
-    const sourceMap = options && options.sourceMap
-    if (sourceMap === 'inline') {
-      expect(await result.hasCssMapFile()).toBe(false)
-    } else if (sourceMap === true) {
-      expect(await result.hasCssMapFile()).toBe(Boolean(options.extract))
       if (options.extract) {
-        expect(await result.cssMap()).toMatchSnapshot('css map')
+        expect(await result.hasCssFile()).toBe(true)
+        expect(await result.cssCode()).toMatchSnapshot('css code')
       }
-    }
-  }, JEST_TIMEOUT)
+
+      const sourceMap = options && options.sourceMap
+      if (sourceMap === 'inline') {
+        expect(await result.hasCssMapFile()).toBe(false)
+      } else if (sourceMap === true) {
+        expect(await result.hasCssMapFile()).toBe(Boolean(options.extract))
+        if (options.extract) {
+          expect(await result.cssMap()).toMatchSnapshot('css map')
+        }
+      }
+    },
+    JEST_TIMEOUT
+  )
 }
 
-function snapshotMany(title, tests) {
+/**
+ *
+ */
+function snapshotMany(
+  title: string,
+  tests: { input: string; title: string; options?: PostCSSPluginConf }[]
+) {
   describe(title, () => {
     for (const test of tests) {
       snapshot({
         ...test,
-        outDir: `${title}--${test.title}`
+        outDir: `${title}--${test.title}`,
       })
     }
   })
@@ -133,294 +169,291 @@ function snapshotMany(title, tests) {
 
 snapshotMany('basic', [
   {
+    input: 'simple/index.js',
     title: 'simple',
-    input: 'simple/index.js'
   },
   {
+    input: 'postcss-config/index.js',
     title: 'postcss-config',
-    input: 'postcss-config/index.js'
   },
   {
-    title: 'skip-loader',
     input: 'skip-loader/index.js',
     options: {
-      use: ['loader'],
       loaders: [
         {
           name: 'loader',
-          test: /\.random$/,
           process() {
             return 'lol'
-          }
-        }
-      ]
-    }
+          },
+          test: /\.random$/,
+        },
+      ],
+      use: ['loader'],
+    },
+    title: 'skip-loader',
   },
   {
-    title: 'postcss-options',
     input: 'postcss-options/index.js',
     options: {
-      plugins: [
-        require('autoprefixer')()
-      ]
-    }
+      plugins: [importSync('autoprefixer')()],
+    },
+    title: 'postcss-options',
   },
   {
-    title: 'on-import',
     input: 'simple/index.js',
     options: {
-      onImport: () => { }
-    }
-  }
+      onImport: () => {},
+    },
+    title: 'on-import',
+  },
 ])
 
 snapshotMany('minimize', [
   {
+    input: 'simple/index.js',
+    options: {
+      minimize: true,
+    },
     title: 'inject',
-    input: 'simple/index.js',
-    options: {
-      minimize: true
-    }
   },
   {
+    input: 'simple/index.js',
+    options: {
+      extract: true,
+      minimize: true,
+    },
     title: 'extract',
-    input: 'simple/index.js',
-    options: {
-      minimize: true,
-      extract: true
-    }
   },
   {
+    input: 'simple/index.js',
+    options: {
+      extract: true,
+      minimize: true,
+      sourceMap: true,
+    },
     title: 'extract-sourcemap-true',
-    input: 'simple/index.js',
-    options: {
-      minimize: true,
-      extract: true,
-      sourceMap: true
-    }
   },
   {
-    title: 'extract-sourcemap-inline',
     input: 'simple/index.js',
     options: {
-      minimize: true,
       extract: true,
-      sourceMap: 'inline'
-    }
-  }
+      minimize: true,
+      sourceMap: 'inline',
+    },
+    title: 'extract-sourcemap-inline',
+  },
 ])
 
 snapshotMany('modules', [
   {
-    title: 'inject',
     input: 'css-modules/index.js',
     options: {
-      modules: true
-    }
+      modules: true,
+    },
+    title: 'inject',
   },
   {
-    title: 'inject-object',
     input: 'css-modules/index.js',
     options: {
       autoModules: false,
       modules: {
         getJSON() {
           //
-        }
-      }
-    }
+        },
+      },
+    },
+    title: 'inject-object',
   },
   {
-    title: 'named-exports',
     input: 'named-exports/index.js',
     options: {
       modules: true,
-      namedExports: true
-    }
+      namedExports: true,
+    },
+    title: 'named-exports',
   },
   {
-    title: 'named-exports-custom-class-name',
     input: 'named-exports/index.js',
     options: {
       modules: true,
       namedExports(name) {
-        return name + 'hacked'
-      }
-    }
+        return `${name}hacked`
+      },
+    },
+    title: 'named-exports-custom-class-name',
   },
   {
-    title: 'extract',
     input: 'css-modules/index.js',
     options: {
+      extract: true,
       modules: true,
-      extract: true
-    }
+    },
+    title: 'extract',
   },
   {
+    input: 'auto-modules/index.js',
     title: 'auto-modules',
-    input: 'auto-modules/index.js'
-  }
+  },
 ])
 
 snapshotMany('sourcemap', [
   {
-    title: 'true',
     input: 'simple/index.js',
     options: {
-      sourceMap: true
-    }
+      sourceMap: true,
+    },
+    title: 'true',
   },
   // Is it broken?
   {
-    title: 'inline',
     input: 'simple/index.js',
     options: {
-      sourceMap: 'inline'
-    }
-  }
+      sourceMap: 'inline',
+    },
+    title: 'inline',
+  },
 ])
 
 snapshotMany('extract', [
   {
-    title: 'true',
     input: 'simple/index.js',
     options: {
-      extract: true
-    }
+      extract: true,
+    },
+    title: 'true',
   },
   {
-    title: 'custom-path',
     input: 'simple/index.js',
     options: {
       extract: fixture('dist/extract--custom-path/this/is/extracted.css'),
-      sourceMap: true
-    }
+      sourceMap: true,
+    },
+    title: 'custom-path',
   },
   {
-    title: 'relative-path',
     input: 'simple/index.js',
     options: {
       extract: 'this/is/extracted.css',
-      sourceMap: true
-    }
-  },
-  {
-    title: 'sourcemap-true',
-    input: 'simple/index.js',
-    options: {
       sourceMap: true,
-      extract: true
-    }
+    },
+    title: 'relative-path',
   },
   {
-    title: 'sourcemap-inline',
     input: 'simple/index.js',
     options: {
-      sourceMap: 'inline',
-      extract: true
-    }
-  },
-  {
-    title: 'nested',
-    input: 'nested/index.js',
-    options: {
-      sourceMap: 'inline',
-      extract: true
-    }
-  },
-  {
-    title: 'nested-delay-resolve',
-    input: 'nested/index.js',
-    options: {
-      sourceMap: 'inline',
       extract: true,
-      delayResolve: true
-    }
-  }
+      sourceMap: true,
+    },
+    title: 'sourcemap-true',
+  },
+  {
+    input: 'simple/index.js',
+    options: {
+      extract: true,
+      sourceMap: 'inline',
+    },
+    title: 'sourcemap-inline',
+  },
+  {
+    input: 'nested/index.js',
+    options: {
+      extract: true,
+      sourceMap: 'inline',
+    },
+    title: 'nested',
+  },
+  {
+    input: 'nested/index.js',
+    options: {
+      delayResolve: true,
+      extract: true,
+      sourceMap: 'inline',
+    },
+    title: 'nested-delay-resolve',
+  },
 ])
 
 snapshotMany('inject', [
   {
-    title: 'top',
     input: 'simple/index.js',
     options: {
       inject: {
-        insertAt: 'top'
-      }
-    }
+        insertAt: 'top',
+      },
+    },
+    title: 'top',
   },
   {
+    input: 'simple/index.js',
+    options: {
+      inject: (variableName) => `console.log(${variableName})`,
+    },
     title: 'function',
-    input: 'simple/index.js',
-    options: {
-      inject: variableName => `console.log(${variableName})`
-    }
   },
   {
-    title: 'false',
     input: 'simple/index.js',
     options: {
-      inject: false
-    }
-  }
+      inject: false,
+    },
+    title: 'false',
+  },
 ])
 
 snapshotMany('sass', [
   {
+    input: 'sass/index.js',
     title: 'default',
-    input: 'sass/index.js'
   },
   {
-    title: 'sourcemap',
     input: 'sass/index.js',
     options: {
-      sourceMap: true
-    }
+      sourceMap: true,
+    },
+    title: 'sourcemap',
   },
   {
-    title: 'modules',
     input: 'sass-modules/index.js',
     options: {
-      modules: true
-    }
+      modules: true,
+    },
+    title: 'modules',
   },
   {
-    title: 'data-prepend',
     input: 'sass-data-prepend/index.js',
     options: {
-      use: [
-        [
-          'sass',
-          { data: '@import \'prepend\';' }
-        ]
-      ]
-    }
+      use: [['sass', { data: "@import 'prepend';" }]],
+    },
+    title: 'data-prepend',
   },
   {
-    title: 'data-prepend',
     input: 'sass-data-prepend/index.js',
     options: {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       use: {
-        sass: { data: '@import \'prepend\';' }
-      }
-    }
+        sass: { data: "@import 'prepend';" },
+      },
+    },
+    title: 'data-prepend',
   },
   {
+    input: 'sass-import/index.js',
     title: 'import',
-    input: 'sass-import/index.js'
-  }
+  },
 ])
 
 test('onExtract', async () => {
   const result = await write({
     input: 'simple/index.js',
-    outDir: 'onExtract',
     options: {
       extract: true,
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       onExtract() {
         return false
-      }
-    }
+      },
+    },
+    outDir: 'onExtract',
   })
   expect(await result.jsCode()).toMatchSnapshot()
   expect(await result.hasCssFile()).toBe(false)
@@ -431,16 +464,16 @@ test('augmentChunkHash', async () => {
   const cssFiles = ['simple/foo.css', 'simple/foo.css', 'simple/bar.css']
 
   const outputFiles = []
-  /* eslint-disable no-await-in-loop */
+
   for (const file of cssFiles) {
     const newBundle = await rollup({
       input: fixture(file),
-      plugins: [postcss({ extract: true })]
+      plugins: [postcss({ extract: true })],
     })
     const entryFileName = file.split('.')[0]
     const { output } = await newBundle.write({
       dir: outDir,
-      entryFileNames: `${entryFileName}.[hash].css`
+      entryFileNames: `${entryFileName}.[hash].css`,
     })
     outputFiles.push(output[0])
   }

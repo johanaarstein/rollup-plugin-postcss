@@ -1,6 +1,6 @@
 import pify from 'pify'
-import humanlizePath from '@/utils/humanlize-path'
-import { loadModule } from '@/utils/load-module'
+import type { SourceMapInput } from 'rollup'
+import { humanlizePath, loadModule } from '@/utils'
 
 const lessLoader = {
   name: 'less',
@@ -8,7 +8,7 @@ const lessLoader = {
     code,
   }: {
     code: string
-  }): Promise<{ code: string; map?: string }> {
+  }): Promise<{ code: string; map?: SourceMapInput }> {
     const less = loadModule('less')
     if (!less) {
       throw new Error(
@@ -19,27 +19,41 @@ const lessLoader = {
     const lessObject: {
       css: string
       imports: unknown[]
-      map?: string
+      map?: SourceMapInput
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
     } = await pify(less.render.bind(less))(code, {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       ...this.options,
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       filename: this.id,
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       sourceMap: this.sourceMap && {},
     })
 
     for (const dep of lessObject.imports) {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       this.dependencies.add(dep)
     }
 
-    let map:
-      | {
-          sources: (string | undefined)[]
-        }
-      | undefined
+    let map: SourceMapInput | undefined
 
     if (lessObject.map) {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       map = JSON.parse(lessObject.map)
-      if (map?.sources) {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      if (typeof map === 'object' && map?.sources) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
         map.sources =
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
           map.sources.map((source) => source && humanlizePath(source)) || []
       }
     }
