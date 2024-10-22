@@ -19,7 +19,7 @@ const __filename = fileURLToPath(import.meta.url),
   }),
   eslintConfig = [
     {
-      ignores: ['**/node_modules', 'types/**/*', 'dist/**/*', 'dev/**/*'],
+      ignores: ['**/node_modules', 'types/**/*', 'dist/**/*', 'test/**/*'],
     },
     ...compat.extends(
       'eslint:recommended',
