@@ -4,9 +4,10 @@ import { readFile } from 'fs/promises'
 import commonjs from '@rollup/plugin-commonjs'
 import { dts } from 'rollup-plugin-dts'
 import { nodeResolve } from '@rollup/plugin-node-resolve'
-import { summary } from 'rollup-plugin-summary'
+// import { summary } from 'rollup-plugin-summary'
 import { swc } from 'rollup-plugin-swc3'
 import { typescriptPaths } from 'rollup-plugin-typescript-paths'
+import json from '@rollup/plugin-json'
 
 const __filename = fileURLToPath(import.meta.url),
   __dirname = path.dirname(__filename),
@@ -26,38 +27,39 @@ const __filename = fileURLToPath(import.meta.url),
     plugins: [dts()],
   },
   module = {
-    external: Object.keys(pkg.dependencies),
+    // external: Object.keys(pkg.dependencies),
     input: path.resolve(__dirname, 'src', 'index.ts'),
-    onwarn(warning, warn) {
-      if (
-        warning.code === 'THIS_IS_UNDEFINED' ||
-        warning.code === 'CIRCULAR_DEPENDENCY'
-      ) {
-        return
-      }
-      warn(warning)
-    },
+    // onwarn(warning, warn) {
+    //   if (
+    //     warning.code === 'THIS_IS_UNDEFINED' ||
+    //     warning.code === 'CIRCULAR_DEPENDENCY'
+    //   ) {
+    //     return
+    //   }
+    //   warn(warning)
+    // },
     output: [
       {
-        exports: 'named',
+        exports: 'auto',
         file: pkg.module,
         format: 'esm',
       },
-      // {
-      //   exports: 'named',
-      //   file: pkg.exports['.'].require,
-      //   format: 'cjs',
-      // },
+      {
+        exports: 'auto',
+        file: pkg.exports['.'].require,
+        format: 'cjs',
+      },
     ],
     plugins: [
       typescriptPaths(),
+      json(),
       nodeResolve({
         extensions: ['.ts'],
         preferBuiltins: true,
       }),
       commonjs(),
       swc(),
-      summary(),
+      // summary(),
     ],
   }
 

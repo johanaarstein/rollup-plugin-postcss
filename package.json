@@ -6,6 +6,9 @@
   "main": "./dist/esm/index.js",
   "type": "module",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "import": "./dist/esm/index.js",
@@ -15,7 +18,8 @@
     }
   },
   "scripts": {
-    "test": "jest --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
     "test:cov": "pnpm lint && jest --coverage",
     "prebuild": "rimraf ./dist",
     "build": "rollup -c",
